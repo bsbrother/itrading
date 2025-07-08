@@ -1,6 +1,6 @@
 """
 高级股票选择器策略
-Advanced Stock Picker Strategy
+Advanced Stock Picker Strategy, Support custom configure.
 
 基于配置文件的可定制化选股策略
 """
