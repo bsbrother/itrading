@@ -9,8 +9,8 @@ import os
 import sys
 import logging
 import pandas as pd
-from typing import Dict, Tuple
-from datetime import datetime
+from typing import Dict, Tuple, Union
+from datetime import datetime, date
 
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -255,12 +255,14 @@ class AdvancedStockPicker(BaseStockPicker):
         return df
 
     def select_stocks_advanced(self,
-                             max_stocks: int = None,
-                             auto_adjust_mode: bool = True) -> Tuple[pd.DataFrame, Dict]:
+        trade_date: Union[str, date, datetime] = None,
+        max_stocks: int = None,
+        auto_adjust_mode: bool = True) -> Tuple[pd.DataFrame, Dict]:
         """
         执行高级选股流程
 
         Args:
+            trade_date: 交易日期，可以是字符串、日期对象或时间戳
             max_stocks: 最大选择股票数量
             auto_adjust_mode: 是否自动调整市场模式
 
@@ -273,7 +275,7 @@ class AdvancedStockPicker(BaseStockPicker):
         logger.info("开始执行高级选股流程...")
 
         # 1. 获取市场数据
-        market_data = self.get_market_data()
+        market_data = self.get_market_data(trade_date=trade_date)
 
         # 2. 自动分析市场环境（如果启用）
         if auto_adjust_mode:
@@ -452,6 +454,7 @@ def main():
     # 执行选股
     try:
         selected_stocks, stats = picker.select_stocks_advanced(
+            trade_date=datetime.now().strftime('%Y%m%d'),
             max_stocks=8,
             auto_adjust_mode=True
         )

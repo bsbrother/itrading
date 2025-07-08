@@ -9,13 +9,16 @@ import os
 import logging
 import pandas as pd
 from typing import Dict, Tuple
-from datetime import datetime
+import datetime
+from datetime import time
 from dotenv import load_dotenv
 
 # 导入数据源
 import qstock as qs
 import tushare as ts
 import akshare as ak
+
+from utils import util
 
 # 设置日志
 logging.basicConfig(level=logging.INFO)
@@ -88,31 +91,166 @@ class BaseStockPicker:
         except Exception as e:
             logger.error(f"Failed to initialize data sources: {e}")
             self.ts_pro = None
-    
-    def get_market_data(self) -> pd.DataFrame:
+        
+    def get_market_date_tushare(self, trade_date: str | datetime.date | datetime.datetime) -> pd.DataFrame:
         """
-        获取市场数据
+        Get market data by trade date using Tushare Pro API.
+        
+        Args:
+            trade_date: 交易日期，可以是字符串、日期对象或时间戳
+            
+        Returns:
+            包含股票数据的DataFrame
+        """
+
+        if not self.ts_pro:
+            logger.error("Tushare Pro API未配置，无法获取市场数据")
+            return pd.DataFrame()
+        
+        trade_date = util.convert_trade_date(trade_date)
+        if not trade_date:
+            raise ValueError("无效的交易日期格式")
+        
+        # 获取当日行情数据
+        daily_data = self.ts_pro.daily(
+            trade_date=trade_date,
+            fields='ts_code,trade_date,close,open,high,low,pre_close,change,pct_chg,vol,amount,turnover_rate'
+        )
+        if trade_date != datetime.datetime.now().strftime('%Y%m%d'):
+            return daily_data
+        
+        # 获取当日股票列表和基本信息
+        stock_basic = self.ts_pro.stock_basic(
+            exchange='', 
+            list_status='L', 
+            fields='ts_code,symbol,name,area,industry,market'
+        )
+        
+        if daily_data.empty:
+            logger.info("当日无交易数据，获取最近交易日数据...")
+            last_trade_date = util.last_trading_day(trade_date)
+            daily_data = self.ts_pro.daily(
+                trade_date=last_trade_date,
+                fields='ts_code,trade_date,close,open,high,low,pre_close,change,pct_chg,vol,amount,turnover_rate'
+            )
+            
+        # 合并基本信息和行情数据
+        df = pd.merge(stock_basic, daily_data, on='ts_code', how='inner')
+            
+        # 获取实时数据（如果可用）
+        # 获取资金流向数据作为量比的替代
+        moneyflow = self.ts_pro.moneyflow(
+            trade_date=trade_date,
+            fields='ts_code,buy_sm_vol,sell_sm_vol'
+        )
+        df = pd.merge(df, moneyflow, on='ts_code', how='left')
+    
+        # 标准化列名以匹配现有格式
+        df = self._standardize_tushare_columns(df)
+            
+        logger.info(f"✅ Tushare Pro API成功获取到 {len(df)} 只股票数据")
+        return df
+
+
+    def get_market_data(self, trade_date: str | datetime.date | datetime.datetime) -> pd.DataFrame:
+        """
+        Get market data by trade date.
+
+        Use the following data sources API by orders: Qstock API -> Akshare API -> Tushare Pro API -> Mock data
+        
+        Args:
+            trade_date: 交易日期，可以是字符串、日期对象或时间戳
+
+        Returns:
+            包含股票数据的DataFrame
+        """
+
+        trade_date = util.convert_trade_date(trade_date)
+        if trade_date < datetime.datetime.now().strftime('%Y%m%d'):
+            logger.info(f"获取 {trade_date} 的市场数据 by tushare API and return.")
+            return self.get_market_data_tushare(trade_date)
+        
+
+        if time(9, 30) <= datetime.datetime.now().time() <= time(11, 30) or \
+              time(13, 0) <= datetime.datetime.now().time() <= time(15, 0):
+            logger.info(f"获取 {trade_date} 的市场数据 realtime data by qstock/akshare/tushare API.")
+
+        if time(8, 0) <= datetime.datetime.now().time() <= time(9, 30) or \
+              time(15, 0) <= datetime.datetime.now().time() <= time(16, 30):
+            logger.warning("pre-market(8:00 - before 9:30) or post-market(after 15:00 - 16:30) will init or sync stock data, APIs will connect close error.")
+
+         
+        # 第1优先级：使用Qstock API
+        try:
+            logger.info("第1优先级：尝试使用Qstock API获取市场数据...")
+            df = qs.market_realtime()
+            logger.info(f"✅ Qstock API成功获取到 {len(df)} 只股票的实时数据")
+            return df
+        except Exception as e2:
+            logger.error(f"❌ Qstock API失败: {e2}")
+            
+        # 第2优先级：使用Akshare API
+        try:
+            logger.info("第2优先级：尝试使用Akshare API获取市场数据...")
+            df = ak.stock_zh_a_spot() # stock_zh_a_spot_em() cause connect closed error.
+            logger.info(f"✅ Akshare API成功获取到 {len(df)} 只股票数据")
+            
+            # 标准化akshare的列名以匹配格式
+            df = self._standardize_akshare_columns(df)
+            return df
+        except Exception as e:
+            logger.error(f"❌ Akshare API失败: {e}")
+
+        try:
+            logger.info("第3优先级：尝试使用Tushare API获取市场数据...")
+            return self.get_market_date_tushare(trade_date)
+        except Exception as e:
+            logger.error(f"❌ Tushare Pro API失败: {e}")
+            # 最后备用：生成模拟数据用于演示/测试
+            logger.warning("🔄 所有API数据源不可用，使用模拟数据进行演示/测试")
+            return self._generate_mock_data()
+            
+    
+    def _generate_mock_data(self) -> pd.DataFrame:
+        """
+        生成模拟股票数据用于演示
         
         Returns:
-            包含股票实时数据的DataFrame
+            包含模拟股票数据的DataFrame
         """
-        try:
-            # 优先使用qstock获取实时数据
-            df = qs.realtime_data(market='沪深A')
-            logger.info(f"获取到 {len(df)} 只股票的实时数据")
-            return df
-            
-        except Exception as e:
-            logger.error(f"Failed to get market data from qstock: {e}")
-            
-            # 备用：使用akshare获取数据
-            try:
-                df = ak.stock_zh_a_spot_em()
-                logger.info(f"使用akshare获取到 {len(df)} 只股票数据")
-                return df
-            except Exception as e2:
-                logger.error(f"Failed to get market data from akshare: {e2}")
-                raise Exception("无法获取市场数据")
+        import numpy as np
+        
+        # 创建一些模拟股票数据
+        mock_stocks = [
+            ['000001', '平安银行', 12.50, 12.60, 12.80, 12.30, 12.45, 2.1, 1.2, 8.5, 1000000, 1.26e9, 12.34, 5.2e10, 4.8e10],
+            ['000002', '万科A', 18.20, 18.50, 18.65, 18.10, 18.15, 1.8, 0.9, 12.3, 800000, 1.48e9, 18.12, 2.1e11, 1.95e11],
+            ['000858', '五粮液', 165.30, 168.20, 170.00, 164.50, 166.80, 1.2, 1.5, 22.1, 500000, 8.41e9, 163.45, 6.5e11, 6.2e11],
+            ['600036', '招商银行', 45.80, 46.20, 46.50, 45.60, 45.95, 0.8, 1.1, 9.2, 300000, 1.38e9, 45.75, 1.8e12, 1.7e12],
+            ['600519', '贵州茅台', 1680.50, 1705.30, 1720.00, 1675.20, 1690.80, 0.3, 2.1, 35.8, 100000, 1.71e10, 1672.40, 2.1e12, 2.0e12],
+            ['000858', '比亚迪', 280.40, 285.60, 290.00, 278.50, 282.30, 2.5, 1.8, 18.6, 600000, 1.71e9, 277.80, 8.2e11, 7.8e11],
+            ['002415', '海康威视', 35.60, 36.20, 36.80, 35.40, 35.85, 1.5, 1.3, 15.2, 400000, 1.45e9, 35.45, 3.4e11, 3.2e11],
+            ['300059', '东方财富', 18.90, 19.20, 19.50, 18.70, 19.10, 3.2, 2.1, 28.5, 2000000, 3.84e9, 18.75, 2.9e11, 2.8e11],
+            ['600050', '中国联通', 5.80, 5.90, 6.00, 5.75, 5.85, 2.8, 1.4, 18.9, 1500000, 8.85e8, 5.75, 1.8e11, 1.7e11],
+            ['601318', '中国平安', 62.30, 63.50, 64.00, 62.00, 62.80, 1.6, 1.0, 11.8, 800000, 5.08e9, 62.15, 1.1e12, 1.0e12]
+        ]
+        
+        columns = ['代码', '名称', '昨收', '最新', '最高', '最低', '今开', '涨幅', '换手率', '市盈率', '成交量', '成交额', '量比', '总市值', '流通市值']
+        
+        df = pd.DataFrame(mock_stocks, columns=columns)
+        
+        # 计算涨幅
+        df['涨幅'] = ((df['最新'] - df['昨收']) / df['昨收'] * 100).round(2)
+        
+        # 添加一些随机性
+        np.random.seed(42)
+        df['涨幅'] = df['涨幅'] + np.random.normal(0, 0.5, len(df))
+        df['涨幅'] = df['涨幅'].round(2)
+        
+        # 重新计算最新价
+        df['最新'] = (df['昨收'] * (1 + df['涨幅'] / 100)).round(2)
+        
+        logger.info(f"生成了 {len(df)} 只模拟股票数据")
+        return df
     
     def check_market_environment(self, df: pd.DataFrame) -> Tuple[bool, float]:
         """
@@ -515,7 +653,7 @@ class BaseStockPicker:
         
         # 1. 获取市场数据
         market_data = self.get_market_data()
-        
+
         # 2. 检查市场环境
         is_good_market, up_ratio = self.check_market_environment(market_data)
         
@@ -523,7 +661,7 @@ class BaseStockPicker:
             'total_stocks': len(market_data),
             'up_ratio': up_ratio,
             'is_good_market': is_good_market,
-            'selection_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            'selection_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
         # 如果市场环境不佳，返回空结果 (但允许预开盘筛选)
@@ -639,8 +777,100 @@ class BaseStockPicker:
             print("⚠️  风险提示: 投资有风险，交易需谨慎！")
             print("📝 建议: 结合基本面分析，设置止损点，控制仓位")
         print("="*60)
+    
+    def _standardize_tushare_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        标准化Tushare数据列名
+        
+        Args:
+            df: Tushare数据DataFrame
+            
+        Returns:
+            标准化后的DataFrame
+        """
+        # Tushare字段映射到标准格式
+        tushare_column_mapping = {
+            'ts_code': '代码',
+            'symbol': '代码',
+            'name': '名称',
+            'close': '最新',
+            'open': '今开',
+            'high': '最高',
+            'low': '最低',
+            'pre_close': '昨收',
+            'change': '涨跌',
+            'pct_chg': '涨幅',
+            'vol': '成交量',
+            'amount': '成交额',
+            'turnover_rate': '换手率'
+        }
+        
+        # 重命名列
+        df_clean = df.copy()
+        for old_col, new_col in tushare_column_mapping.items():
+            if old_col in df_clean.columns:
+                df_clean = df_clean.rename(columns={old_col: new_col})
+        
+        # 处理代码格式（Tushare格式为000001.SZ，需要转换为000001）
+        if '代码' in df_clean.columns:
+            df_clean['代码'] = df_clean['代码'].astype(str).str.split('.').str[0]
+        
+        # 计算缺失的字段
+        if '涨幅' in df_clean.columns:
+            df_clean['涨幅'] = pd.to_numeric(df_clean['涨幅'], errors='coerce')
+        
+        # 估算市盈率（简化计算）
+        if '最新' in df_clean.columns and '市盈率' not in df_clean.columns:
+            df_clean['市盈率'] = 15.0  # 使用平均市盈率
+        
+        # 估算量比（简化处理）
+        if '量比' not in df_clean.columns:
+            df_clean['量比'] = 1.0
+        
+        # 估算总市值和流通市值（需要获取股本数据，这里简化处理）
+        if '总市值' not in df_clean.columns and '最新' in df_clean.columns:
+            df_clean['总市值'] = 1e10  # 简化为100亿
+            df_clean['流通市值'] = 8e9  # 简化为80亿
+        
+        return df_clean
+    
+    def _standardize_akshare_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        标准化akshare数据列名
+        
+        Args:
+            df: akshare数据DataFrame
+            
+        Returns:
+            标准化后的DataFrame
+        """
+        akshare_column_mapping = {
+            '代码': '代码',
+            '名称': '名称', 
+            '涨跌幅': '涨幅',
+            '最新价': '最新',
+            '最高': '最高',
+            '最低': '最低',
+            '今开': '今开',
+            '换手率': '换手率',
+            '量比': '量比',
+            '市盈率-动态': '市盈率',
+            '成交量': '成交量',
+            '成交额': '成交额',
+            '昨收': '昨收',
+            '总市值': '总市值',
+            '流通市值': '流通市值'
+        }
+        
+        # 重命名列以保持一致性
+        df_clean = df.copy()
+        for old_col, new_col in akshare_column_mapping.items():
+            if old_col in df_clean.columns and old_col != new_col:
+                df_clean = df_clean.rename(columns={old_col: new_col})
+        
+        return df_clean
 
-
+    # ...existing code...
 def main():
     """主函数 - 演示选股流程"""
     # 创建股票选择器实例
@@ -655,7 +885,7 @@ def main():
         
         # 保存结果（可选）
         if len(selected_stocks) > 0:
-            filename = f"/tmp/itrading/selected_stocks_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            filename = f"/tmp/itrading/selected_stocks_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
             selected_stocks.to_csv(filename, index=False, encoding='utf-8-sig')
             print(f"\n💾 选股结果已保存至: {filename}")
             

@@ -27,7 +27,7 @@
   ```
 
 ## Use Tushare or Akshare or Qstock Financial Data APIs
-  Prefer using the Tushare API, with the Akshare API as a fallback option.
+  Preferred to using the Tushare API, Akshare API and Qstock API as a fallback option, lastest to use mock data for testing or demo purposes.
 
   Example [Tushare Pro for fetch cash flow data](https://tushare.pro/document/2?doc_id=16):
   ```python
