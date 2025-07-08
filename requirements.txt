@@ -1,0 +1,10 @@
+python-dotenv
+pandas
+numpy
+matplotlib
+google-genai
+tushare
+akshare
+qstock
+pyfolio
+backtrader
