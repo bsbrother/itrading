@@ -3,17 +3,10 @@ AI增强股票分析，集成了**25项财务指标分析**、**综合新闻情�
 """
 
 import os
-import sys
-import pprint
 import logging
 import pandas as pd
-import numpy as np
-import json
 import math
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Callable
-import time
-import re
 
 import akshare as ak
 import tushare as ts
@@ -47,64 +40,28 @@ logging.basicConfig(
     ]
 )
 
-class WebStockAnalyzer:
-    """Web版增强股票分析器（基于最新 stock_analyzer.py 修正，支持AI流式输出）"""
+class AIStockAnalyzer:
+    """AI增强股票分析器 - 基于Google Gemini"""
 
-    def __init__(self, config_file='config.json'):
+    def __init__(self):
         """初始化分析器"""
         self.logger = logging.getLogger(__name__)
-        self.config_file = config_file
-
-        # 加载配置文件
-        self.config = self._load_config()
-
-        # 缓存配置
-        cache_config = self.config.get('cache', {})
-        self.cache_duration = timedelta(hours=cache_config.get('price_hours', 1))
-        self.fundamental_cache_duration = timedelta(hours=cache_config.get('fundamental_hours', 6))
-        self.news_cache_duration = timedelta(hours=cache_config.get('news_hours', 2))
-
-        self.price_cache = {}
-        self.fundamental_cache = {}
-        self.news_cache = {}
 
         # 分析权重配置
-        weights = self.config.get('analysis_weights', {})
         self.analysis_weights = {
-            'technical': weights.get('technical', 0.4),
-            'fundamental': weights.get('fundamental', 0.4),
-            'sentiment': weights.get('sentiment', 0.2)
-        }
-
-        # 流式推理配置
-        streaming = self.config.get('streaming', {})
-        self.streaming_config = {
-            'enabled': streaming.get('enabled', True),
-            'show_thinking': streaming.get('show_thinking', True),
-            'delay': streaming.get('delay', 0.1)
-        }
-
-        # AI配置
-        ai_config = self.config.get('ai', {})
-        self.ai_config = {
-            'max_tokens': ai_config.get('max_tokens', 4000),
-            'temperature': ai_config.get('temperature', 0.7),
-            'model_preference': ai_config.get('model_preference', 'openai')
+            'technical': 0.4,
+            'fundamental': 0.4,
+            'sentiment': 0.2
         }
 
         # 分析参数配置
-        params = self.config.get('analysis_params', {})
         self.analysis_params = {
-            'max_news_count': params.get('max_news_count', 100),  # Web版减少新闻数量
-            'technical_period_days': params.get('technical_period_days', 180),  # Web版减少分析周期
-            'financial_indicators_count': params.get('financial_indicators_count', 25)  # 保持25项指标
+            'max_news_count': 100,
+            'technical_period_days': 180,
+            'financial_indicators_count': 25
         }
 
-        # API密钥配置
-        self.api_keys = self.config.get('api_keys', {})
-
-        self.logger.debug("Web版股票分析器初始化完成（支持AI流式输出）")
-        self._log_config_status()
+        self.logger.debug("AI股票分析器初始化完成")
 
     def _get_ts_code(self, stock_code: str) -> str:
         # 转换股票代码格式 (000006 -> 000006.SZ)
@@ -116,150 +73,11 @@ class WebStockAnalyzer:
             ts_code = f"{stock_code}.SZ"  # 默认深圳
         return ts_code
 
-    def _load_config(self):
-        """加载JSON配置文件"""
-        try:
-            if os.path.exists(self.config_file):
-                with open(self.config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                self.logger.debug(f"✅ 成功加载配置文件: {self.config_file}")
-                return config
-            else:
-                self.logger.warning(f"⚠️ 配置文件 {self.config_file} 不存在，使用默认配置")
-                default_config = self._get_default_config()
-                self._save_config(default_config)
-                return default_config
-
-        except json.JSONDecodeError as e:
-            self.logger.error(f"❌ 配置文件格式错误: {e}")
-            self.logger.debug("使用默认配置并备份错误文件")
-
-            if os.path.exists(self.config_file):
-                backup_name = f"{self.config_file}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                os.rename(self.config_file, backup_name)
-                self.logger.debug(f"错误配置文件已备份为: {backup_name}")
-
-            default_config = self._get_default_config()
-            self._save_config(default_config)
-            return default_config
-
-        except Exception as e:
-            self.logger.error(f"❌ 加载配置文件失败: {e}")
-            return self._get_default_config()
-
-    def _get_default_config(self):
-        """获取Web版默认配置"""
-        return {
-            "api_keys": {
-                "openai": "",
-                "anthropic": "",
-                "zhipu": "",
-                "notes": "请填入您的API密钥"
-            },
-            "ai": {
-                "model_preference": "openai",
-                "models": {
-                    "openai": "gpt-4o-mini",
-                    "anthropic": "claude-3-haiku-20240307",
-                    "zhipu": "chatglm_turbo"
-                },
-                "max_tokens": 4000,
-                "temperature": 0.7,
-                "api_base_urls": {
-                    "openai": "https://api.openai.com/v1",
-                    "notes": "如使用中转API，修改上述URL"
-                }
-            },
-            "analysis_weights": {
-                "technical": 0.4,
-                "fundamental": 0.4,
-                "sentiment": 0.2,
-                "notes": "权重总和应为1.0"
-            },
-            "cache": {
-                "price_hours": 1,
-                "fundamental_hours": 6,
-                "news_hours": 2
-            },
-            "streaming": {
-                "enabled": True,
-                "show_thinking": False,
-                "delay": 0.05
-            },
-            "analysis_params": {
-                "max_news_count": 100,
-                "technical_period_days": 180,
-                "financial_indicators_count": 25
-            },
-            "web_auth": {
-                "enabled": False,
-                "password": "",
-                "session_timeout": 3600,
-                "notes": "Web界面密码鉴权配置"
-            },
-            "_metadata": {
-                "version": "3.0.0-web-streaming",
-                "created": datetime.now().isoformat(),
-                "description": "Web版AI股票分析系统配置文件（支持AI流式输出）"
-            }
-        }
-
-    def _save_config(self, config):
-        """保存配置到文件"""
-        try:
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=4)
-            self.logger.debug(f"✅ 配置文件已保存: {self.config_file}")
-        except Exception as e:
-            self.logger.error(f"❌ 保存配置文件失败: {e}")
-
-    def _log_config_status(self):
-        """记录配置状态"""
-        self.logger.debug("=== Web版系统配置状态（支持AI流式输出）===")
-
-        # 检查API密钥状态
-        available_apis = []
-        for api_name, api_key in self.api_keys.items():
-            if api_name != 'notes' and api_key and api_key.strip():
-                available_apis.append(api_name)
-
-        if available_apis:
-            self.logger.debug(f"🤖 可用AI API: {', '.join(available_apis)}")
-            primary = self.config.get('ai', {}).get('model_preference', 'openai')
-            self.logger.debug(f"🎯 主要API: {primary}")
-            self.logger.debug("🌊 AI流式输出: 支持")
-
-            # 显示自定义配置
-            api_base = self.config.get('ai', {}).get('api_base_urls', {}).get('openai')
-            if api_base and api_base != 'https://api.openai.com/v1':
-                self.logger.debug(f"🔗 自定义API地址: {api_base}")
-        else:
-            self.logger.warning("⚠️ 未配置任何AI API密钥")
-
-        self.logger.debug(f"📊 财务指标数量: {self.analysis_params['financial_indicators_count']}")
-        self.logger.debug(f"📰 最大新闻数量: {self.analysis_params['max_news_count']}")
-        self.logger.debug(f"📈 技术分析周期: {self.analysis_params['technical_period_days']} 天")
-
-        # 检查Web鉴权配置
-        web_auth = self.config.get('web_auth', {})
-        if web_auth.get('enabled', False):
-            self.logger.debug(f"🔐 Web鉴权: 已启用")
-        else:
-            self.logger.debug(f"🔓 Web鉴权: 未启用")
-
-        self.logger.debug("=" * 40)
-
     def get_stock_data(self, stock_code, period='1y'):
         """获取股票价格数据（修正版本）"""
-        if stock_code in self.price_cache:
-            cache_time, data = self.price_cache[stock_code]
-            if datetime.now() - cache_time < self.cache_duration:
-                self.logger.debug(f"使用缓存的价格数据: {stock_code}")
-                return data
-
         try:
             end_date = datetime.now().strftime('%Y%m%d')
-            # 使用用户配置的技术分析周期
+            # 使用配置的技术分析周期
             days = self.analysis_params.get('technical_period_days', 180)
             start_date = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
 
@@ -366,7 +184,7 @@ class WebStockAnalyzer:
                 if col in stock_data.columns:
                     try:
                         stock_data[col] = pd.to_numeric(stock_data[col], errors='coerce')
-                    except:
+                    except Exception:
                         pass
 
             # 验证数据质量
@@ -380,9 +198,6 @@ class WebStockAnalyzer:
                     self.logger.error(f"❌ 收盘价数据异常: {latest_close}")
                     raise ValueError(f"股票 {stock_code} 的收盘价数据异常")
 
-            # 缓存数据
-            self.price_cache[stock_code] = (datetime.now(), stock_data)
-
             self.logger.debug(f"✓ 成功获取 {stock_code} 的价格数据，共 {len(stock_data)} 条记录")
             self.logger.debug(f"✓ 数据列: {list(stock_data.columns)}")
 
@@ -394,12 +209,6 @@ class WebStockAnalyzer:
 
     def get_comprehensive_fundamental_data(self, stock_code):
         """获取25项综合财务指标数据（修正版本）"""
-        if stock_code in self.fundamental_cache:
-            cache_time, data = self.fundamental_cache[stock_code]
-            if datetime.now() - cache_time < self.fundamental_cache_duration:
-                self.logger.debug(f"使用缓存的基本面数据: {stock_code}")
-                return data
-
         try:
             fundamental_data = {}
             self.logger.debug(f"开始获取 {stock_code} 的25项综合财务指标...")
@@ -546,9 +355,7 @@ class WebStockAnalyzer:
                 self.logger.warning(f"获取行业分析失败: {e}")
                 fundamental_data['industry_analysis'] = {}
 
-            # 缓存数据
-            self.fundamental_cache[stock_code] = (datetime.now(), fundamental_data)
-            self.logger.debug(f"✓ {stock_code} 综合基本面数据获取完成并已缓存")
+            self.logger.debug(f"✓ {stock_code} 综合基本面数据获取完成")
 
             return fundamental_data
 
@@ -694,13 +501,6 @@ class WebStockAnalyzer:
 
     def get_comprehensive_news_data(self, stock_code, days=15):
         """获取综合新闻数据（修正版本）"""
-        cache_key = f"{stock_code}_{days}"
-        if cache_key in self.news_cache:
-            cache_time, data = self.news_cache[cache_key]
-            if datetime.now() - cache_time < self.news_cache_duration:
-                self.logger.debug(f"使用缓存的新闻数据: {stock_code}")
-                return data
-
         self.logger.debug(f"开始获取 {stock_code} 的综合新闻数据（最近{days}天）...")
 
         try:
@@ -820,9 +620,6 @@ class WebStockAnalyzer:
             except Exception as e:
                 self.logger.warning(f"生成新闻摘要失败: {e}")
 
-            # 缓存数据
-            self.news_cache[cache_key] = (datetime.now(), all_news_data)
-
             self.logger.debug(f"✓ 综合新闻数据获取完成，总计 {all_news_data['news_summary'].get('total_news_count', 0)} 条")
             return all_news_data
 
@@ -841,8 +638,7 @@ class WebStockAnalyzer:
         """计算高级情绪分析（修正版本）"""
         self.logger.debug("开始高级情绪分析...")
 
-        #try:
-        if 1:
+        try:
             # 准备所有新闻文本
             all_texts = []
 
@@ -892,8 +688,7 @@ class WebStockAnalyzer:
             overall_scores = []
 
             for text_data in all_texts:
-                if 1:
-                #try:
+                try:
                     text = text_data['text']
                     text_type = text_data['type']
                     weight = text_data['weight']
@@ -920,8 +715,7 @@ class WebStockAnalyzer:
                         sentiment_by_type[text_type] = []
                     sentiment_by_type[text_type].append(weighted_score)
 
-                else:
-                #except Exception as e:
+                except Exception:
                     continue
 
             # 计算总体情绪
@@ -961,8 +755,7 @@ class WebStockAnalyzer:
             self.logger.debug(f"✓ 高级情绪分析完成: {sentiment_trend} (得分: {overall_sentiment:.3f})")
             return result
 
-        else:
-        #except Exception as e:
+        except Exception as e:
             self.logger.error(f"高级情绪分析失败: {e}")
             return {
                 'overall_sentiment': 0.0,
@@ -1584,8 +1377,8 @@ class WebStockAnalyzer:
 
         return formatted if formatted else "无有效数据"
 
-    def generate_ai_analysis(self, analysis_data, enable_streaming=False, stream_callback=None):
-        """生成AI增强分析 - 支持流式输出"""
+    def generate_ai_analysis(self, analysis_data):
+        """生成AI分析报告 - 基于Google Gemini"""
         try:
             self.logger.debug("🤖 开始AI深度分析...")
 
@@ -1603,8 +1396,8 @@ class WebStockAnalyzer:
                 fundamental_data, sentiment_analysis, price_info
             )
 
-            # 调用AI API（支持流式）
-            ai_response = self._call_ai_api(prompt, enable_streaming, stream_callback)
+            # 调用Gemini API
+            ai_response = self._call_gemini_api(prompt)
 
             if ai_response:
                 self.logger.debug("✅ AI深度分析完成")
@@ -1617,313 +1410,23 @@ class WebStockAnalyzer:
             self.logger.error(f"AI分析失败: {e}")
             return self._advanced_rule_based_analysis(analysis_data)
 
-    def _call_ai_api(self, prompt, enable_streaming=False, stream_callback=None):
-        """调用AI API - 支持流式输出"""
+    def _call_gemini_api(self, prompt):
+        """调用Google Gemini API"""
         try:
             self.logger.debug(f"正在调用Google Gemini {MODEL} 进行深度分析...")
-            """
-            messages = [
-                {"role": "system", "content": "你是一位资深的股票分析师，具有丰富的市场经验和深厚的金融知识。请提供专业、客观、有深度的股票分析。"},
-                {"role": "user", "content": prompt}
-            ]
-            """
+            
             response = CLIENT.models.generate_content(
                 model=MODEL,
                 contents=prompt,
             )
+            
             if response and response.text:
                 return response.text
-            raise ValueError("AI API返回内容为空")
-
-            model_preference = self.config.get('ai', {}).get('model_preference', 'openai')
-
-            if model_preference == 'openai' and self.api_keys.get('openai'):
-                result = self._call_openai_api(prompt, enable_streaming, stream_callback)
-                if result:
-                    return result
-
-            elif model_preference == 'anthropic' and self.api_keys.get('anthropic'):
-                result = self._call_claude_api(prompt, enable_streaming, stream_callback)
-                if result:
-                    return result
-
-            elif model_preference == 'zhipu' and self.api_keys.get('zhipu'):
-                result = self._call_zhipu_api(prompt, enable_streaming, stream_callback)
-                if result:
-                    return result
-
-            # 尝试其他可用的服务
-            if self.api_keys.get('openai') and model_preference != 'openai':
-                self.logger.debug("尝试备用OpenAI API...")
-                result = self._call_openai_api(prompt, enable_streaming, stream_callback)
-                if result:
-                    return result
-
-            if self.api_keys.get('anthropic') and model_preference != 'anthropic':
-                self.logger.debug("尝试备用Claude API...")
-                result = self._call_claude_api(prompt, enable_streaming, stream_callback)
-                if result:
-                    return result
-
-            if self.api_keys.get('zhipu') and model_preference != 'zhipu':
-                self.logger.debug("尝试备用智谱AI API...")
-                result = self._call_zhipu_api(prompt, enable_streaming, stream_callback)
-                if result:
-                    return result
-
-            return None
-
-        except Exception as e:
-            self.logger.error(f"AI API调用失败: {e}")
-            return None
-
-    def _call_openai_api(self, prompt, enable_streaming=False, stream_callback=None):
-        """调用OpenAI API - 支持流式输出"""
-        try:
-            import openai
-
-            api_key = self.api_keys.get('openai')
-            if not api_key:
-                return None
-
-            # 设置API密钥
-            openai.api_key = api_key
-
-            # 处理API base URL
-            api_base = self.config.get('ai', {}).get('api_base_urls', {}).get('openai')
-            if api_base:
-                openai.api_base = api_base
-                self.logger.debug(f"使用自定义API Base: {api_base}")
-
-            model = self.config.get('ai', {}).get('models', {}).get('openai', 'gpt-4o-mini')
-            max_tokens = self.config.get('ai', {}).get('max_tokens', 6000)
-            temperature = self.config.get('ai', {}).get('temperature', 0.7)
-
-            self.logger.debug(f"正在调用OpenAI {model} 进行深度分析...")
-
-            messages = [
-                {"role": "system", "content": "你是一位资深的股票分析师，具有丰富的市场经验和深厚的金融知识。请提供专业、客观、有深度的股票分析。"},
-                {"role": "user", "content": prompt}
-            ]
-
-            # 检测OpenAI库版本并使用相应的API
-            try:
-                # 尝试新版本API (openai >= 1.0)
-                if hasattr(openai, 'OpenAI'):
-                    client = openai.OpenAI(api_key=api_key)
-                    if api_base:
-                        client.base_url = api_base
-
-                    if enable_streaming and stream_callback:
-                        # 流式调用
-                        response = client.chat.completions.create(
-                            model=model,
-                            messages=messages,
-                            max_tokens=max_tokens,
-                            temperature=temperature,
-                            stream=True
-                        )
-
-                        full_response = ""
-                        for chunk in response:
-                            if chunk.choices[0].delta.content:
-                                content = chunk.choices[0].delta.content
-                                full_response += content
-                                # 发送流式内容
-                                if stream_callback:
-                                    stream_callback(content)
-
-                        return full_response
-                    else:
-                        # 非流式调用
-                        response = client.chat.completions.create(
-                            model=model,
-                            messages=messages,
-                            max_tokens=max_tokens,
-                            temperature=temperature
-                        )
-                        return response.choices[0].message.content
-
-                # 使用旧版本API (openai < 1.0)
-                else:
-                    if enable_streaming and stream_callback:
-                        # 流式调用
-                        response = openai.ChatCompletion.create(
-                            model=model,
-                            messages=messages,
-                            max_tokens=max_tokens,
-                            temperature=temperature,
-                            stream=True
-                        )
-
-                        full_response = ""
-                        for chunk in response:
-                            if chunk.choices[0].delta.get('content'):
-                                content = chunk.choices[0].delta.content
-                                full_response += content
-                                # 发送流式内容
-                                if stream_callback:
-                                    stream_callback(content)
-
-                        return full_response
-                    else:
-                        # 非流式调用
-                        response = openai.ChatCompletion.create(
-                            model=model,
-                            messages=messages,
-                            max_tokens=max_tokens,
-                            temperature=temperature
-                        )
-                        return response.choices[0].message.content
-
-            except Exception as api_error:
-                self.logger.error(f"OpenAI API调用错误: {api_error}")
-                return None
-
-        except ImportError:
-            self.logger.error("OpenAI库未安装")
-            return None
-        except Exception as e:
-            self.logger.error(f"OpenAI API调用失败: {e}")
-            return None
-
-    def _call_claude_api(self, prompt, enable_streaming=False, stream_callback=None):
-        """调用Claude API - 支持流式输出"""
-        try:
-            import anthropic
-
-            api_key = self.api_keys.get('anthropic')
-            if not api_key:
-                return None
-
-            client = anthropic.Anthropic(api_key=api_key)
-
-            model = self.config.get('ai', {}).get('models', {}).get('anthropic', 'claude-3-haiku-20240307')
-            max_tokens = self.config.get('ai', {}).get('max_tokens', 6000)
-
-            self.logger.debug(f"正在调用Claude {model} 进行深度分析...")
-
-            if enable_streaming and stream_callback:
-                # 流式调用
-                with client.messages.stream(
-                    model=model,
-                    max_tokens=max_tokens,
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ]
-                ) as stream:
-                    full_response = ""
-                    for text in stream.text_stream:
-                        full_response += text
-                        # 发送流式内容
-                        if stream_callback:
-                            stream_callback(text)
-
-                return full_response
             else:
-                # 非流式调用
-                response = client.messages.create(
-                    model=model,
-                    max_tokens=max_tokens,
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-
-                return response.content[0].text
+                raise ValueError("Gemini API返回内容为空")
 
         except Exception as e:
-            self.logger.error(f"Claude API调用失败: {e}")
-            return None
-
-    def _call_zhipu_api(self, prompt, enable_streaming=False, stream_callback=None):
-        """调用智谱AI API - 支持流式输出"""
-        try:
-            api_key = self.api_keys.get('zhipu')
-            if not api_key:
-                return None
-
-            model = self.config.get('ai', {}).get('models', {}).get('zhipu', 'chatglm_turbo')
-            max_tokens = self.config.get('ai', {}).get('max_tokens', 6000)
-            temperature = self.config.get('ai', {}).get('temperature', 0.7)
-
-            self.logger.debug(f"正在调用智谱AI {model} 进行深度分析...")
-
-            try:
-                # 尝试新版本zhipuai库
-                import zhipuai
-                zhipuai.api_key = api_key
-
-                # 尝试新的调用方式
-                if hasattr(zhipuai, 'ZhipuAI'):
-                    client = zhipuai.ZhipuAI(api_key=api_key)
-
-                    if enable_streaming and stream_callback:
-                        # 流式调用
-                        response = client.chat.completions.create(
-                            model=model,
-                            messages=[
-                                {"role": "user", "content": prompt}
-                            ],
-                            temperature=temperature,
-                            max_tokens=max_tokens,
-                            stream=True
-                        )
-
-                        full_response = ""
-                        for chunk in response:
-                            if chunk.choices[0].delta.content:
-                                content = chunk.choices[0].delta.content
-                                full_response += content
-                                # 发送流式内容
-                                if stream_callback:
-                                    stream_callback(content)
-
-                        return full_response
-                    else:
-                        # 非流式调用
-                        response = client.chat.completions.create(
-                            model=model,
-                            messages=[
-                                {"role": "user", "content": prompt}
-                            ],
-                            temperature=temperature,
-                            max_tokens=max_tokens
-                        )
-                        return response.choices[0].message.content
-
-                # 使用旧版本调用方式
-                else:
-                    # 注意：旧版本可能不支持流式
-                    response = zhipuai.model_api.invoke(
-                        model=model,
-                        prompt=[
-                            {"role": "user", "content": prompt}
-                        ],
-                        temperature=temperature,
-                        max_tokens=max_tokens
-                    )
-
-                    # 处理不同的响应格式
-                    if isinstance(response, dict):
-                        if 'data' in response and 'choices' in response['data']:
-                            return response['data']['choices'][0]['content']
-                        elif 'choices' in response:
-                            return response['choices'][0]['content']
-                        elif 'data' in response:
-                            return response['data']
-
-                    return str(response)
-
-            except ImportError:
-                self.logger.error("智谱AI库未安装")
-                return None
-            except Exception as api_error:
-                self.logger.error(f"智谱AI API调用错误: {api_error}")
-                return None
-
-        except Exception as e:
-            self.logger.error(f"智谱AI API调用失败: {e}")
+            self.logger.error(f"Gemini API调用失败: {e}")
             return None
 
     def _advanced_rule_based_analysis(self, analysis_data):
@@ -1937,7 +1440,6 @@ class WebStockAnalyzer:
             technical_analysis = analysis_data.get('technical_analysis', {})
             fundamental_data = analysis_data.get('fundamental_data', {})
             sentiment_analysis = analysis_data.get('sentiment_analysis', {})
-            price_info = analysis_data.get('price_info', {})
 
             analysis_sections = []
 
@@ -2019,18 +1521,8 @@ class WebStockAnalyzer:
             self.logger.error(f"高级规则分析失败: {e}")
             return "分析系统暂时不可用，请稍后重试。"
 
-    def set_streaming_config(self, enabled=True, show_thinking=True):
-        """设置流式推理配置"""
-        self.streaming_config.update({
-            'enabled': enabled,
-            'show_thinking': show_thinking
-        })
-
-    def analyze_stock(self, stock_code, enable_streaming=None, stream_callback=None):
-        """分析股票的主方法（修正版，支持AI流式输出）"""
-        if enable_streaming is None:
-            enable_streaming = self.streaming_config.get('enabled', False)
-
+    def analyze_stock(self, stock_code):
+        """分析股票的主方法"""
         try:
             self.logger.debug(f"开始增强版股票分析: {stock_code}")
 
@@ -2076,7 +1568,7 @@ class WebStockAnalyzer:
             # 5. 生成投资建议
             recommendation = self.generate_recommendation(scores)
 
-            # 6. AI增强分析（包含所有详细数据，支持流式输出）
+            # 6. AI增强分析
             ai_analysis = self.generate_ai_analysis({
                 'stock_code': stock_code,
                 'stock_name': stock_name,
@@ -2085,7 +1577,7 @@ class WebStockAnalyzer:
                 'fundamental_data': fundamental_data,
                 'sentiment_analysis': sentiment_analysis,
                 'scores': scores
-            }, enable_streaming, stream_callback)
+            })
 
             # 7. 生成最终报告
             report = {
@@ -2119,43 +1611,16 @@ class WebStockAnalyzer:
             self.logger.error(f"增强版股票分析失败 {stock_code}: {str(e)}")
             raise
 
-    def analyze_stock_with_streaming(self, stock_code, streamer):
-        """带流式回调的股票分析方法"""
-        def stream_callback(content):
-            """AI流式内容回调"""
-            if streamer:
-                streamer.send_ai_stream(content)
-
-        return self.analyze_stock(stock_code, enable_streaming=True, stream_callback=stream_callback)
-
-    # 兼容旧版本的方法名
-    def get_fundamental_data(self, stock_code):
-        """兼容方法：获取基本面数据"""
-        return self.get_comprehensive_fundamental_data(stock_code)
-
-    def get_news_data(self, stock_code, days=30):
-        """兼容方法：获取新闻数据"""
-        return self.get_comprehensive_news_data(stock_code, days)
-
-    def calculate_news_sentiment(self, news_data):
-        """兼容方法：计算新闻情绪"""
-        return self.calculate_advanced_sentiment_analysis(news_data)
-
-    def get_sentiment_analysis(self, stock_code):
-        """兼容方法：获取情绪分析"""
-        news_data = self.get_comprehensive_news_data(stock_code)
-        return self.calculate_advanced_sentiment_analysis(news_data)
-
 
 def stock_analyzer(stocks: list) -> tuple:
     """获取股票分析器实例并分析股票列表,返回分析结果
     e.g:['000001', '600036', '300019', '000525']
     """
     lst = []
-    analyzer = WebStockAnalyzer()
+    analyzer = AIStockAnalyzer()
     for stock_code in stocks:
         print(f"\n=== Analysis {stock_code} ")
-        report = analyzer.analyze_stock(stock_code, enable_streaming=False, stream_callback=print_stream)
+        report = analyzer.analyze_stock(stock_code)
         prompt = f'According to the results of this AI deep analysis: provide investment advice (in one or two sentences) and conclusion: sell, buy, or hold:\n\n{report["ai_analysis"]}'
         response = CLIENT.models.generate_content(
             model=MODEL,

@@ -11,6 +11,5 @@
       - Only keep AI google gemini provider.
       - Not use AI streaming method, not need stream_callback function.
 
-
   - Risk control, reasonable allocation of positions, setting stop-loss and take-profit points.
 
