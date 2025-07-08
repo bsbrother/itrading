@@ -473,7 +473,16 @@ def main():
             if '风险调整得分' in selected_stocks.columns:
                 save_columns.append('风险调整得分')
 
-            selected_stocks[save_columns].to_csv(filename, index=False, encoding='utf-8-sig')
+            # 创建保存用的数据副本，并格式化得分列为2位小数
+            save_data = selected_stocks[save_columns].copy()
+            
+            # 格式化得分列为2位小数
+            score_columns = ['综合得分', '风险评分', '风险调整得分']
+            for col in score_columns:
+                if col in save_data.columns:
+                    save_data[col] = save_data[col].apply(lambda x: f"{x:.2f}" if pd.notna(x) else x)
+
+            save_data.to_csv(filename, index=False, encoding='utf-8-sig')
             print(f"\n💾 选股结果已保存至: {filename}")
     except Exception as e:
         logger.error(f"选股过程中发生错误: {e}")
