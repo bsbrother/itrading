@@ -34,6 +34,39 @@ iTrading是一个基于量化分析的早盘选股系统，旨在帮助投资者
 - **动态参数调整**: 根据市场环境自动调整选股参数
 - **智能模式切换**: 预开盘保守模式，开盘后完整评分
 
+### 统一股票选股AI分析器 (UnifiedStockPickAIAnalyzer) 🆕
+- **完整选股流程**: 自动调用高级选股器进行股票筛选
+- **AI深度分析**: 基于Google Gemini的25项财务指标分析和综合新闻情绪分析
+- **最终得分统一**: 整合流通市值、综合得分、风险评分、风险调整得分和AI得分
+- **智能排序**: 基于最终得分的多维度综合排序
+- **完整报告**: 提供详细的选股结果和AI分析报告
+- **自动保存**: 支持结果自动保存为CSV和统计信息
+
+## 🤖 AI增强分析
+
+### 统一选股AI分析器
+`unify_stock_pick_ai_analyzer.py` 提供完整的选股+AI分析解决方案：
+
+**核心功能：**
+- 自动选股：调用高级选股器筛选优质股票
+- AI深度分析：基于Google Gemini的25项财务指标分析
+- 综合新闻情绪分析：整合公司新闻、公告、研究报告
+- 最终得分统一：多维度得分加权计算
+- 智能排序：按最终得分综合排名
+
+**得分组成 (final_score)：**
+- 流通市值 (15%) - 适中规模优先
+- 综合得分 (25%) - 选股器基础得分
+- 风险评分 (20%) - 风险越低越好
+- 风险调整得分 (20%) - 风险调整后表现
+- AI得分 (20%) - AI综合评估
+
+**使用建议：**
+- 建议选股数量6只以内，AI分析耗时较长
+- 网络状况良好时使用，确保AI API稳定
+- 结合技术分析进行最终投资决策
+- 关注AI分析中的风险提示
+
 ## 🚀 快速开始
 
 ### 环境要求
@@ -88,6 +121,26 @@ selected_stocks, stats = picker.select_stocks_advanced(
 picker.display_advanced_results(selected_stocks, stats)
 ```
 
+### 统一AI选股分析
+```python
+from unify_stock_pick_ai_analyzer import UnifiedStockPickAIAnalyzer
+
+# 创建统一分析器
+analyzer = UnifiedStockPickAIAnalyzer(market_mode='normal')
+
+# 执行完整的选股+AI分析
+enhanced_stocks, stats = analyzer.pick_and_analyze_stocks(
+    max_stocks=6,  # 建议6只以内，AI分析耗时较长
+    auto_adjust_mode=True
+)
+
+# 显示完整结果
+analyzer.display_unified_results(enhanced_stocks, stats)
+
+# 保存结果
+analyzer.save_results(enhanced_stocks, stats)
+```
+
 ### 🕘 开盘前使用（9:30前）
 
 #### 基础选股器
@@ -134,10 +187,28 @@ uv run python advanced_stock_picker.py
 #  1. 600744 华银电力     价格: 7.25 涨幅: 8.21% 换手:14.37% 量比: 9.15 市值: 147.3亿 得分:0.423 风险:0.301
 ```
 
+#### 统一AI选股分析器
+```bash
+# 执行完整的选股+AI分析流程
+uv run python unify_stock_pick_ai_analyzer.py
+
+# 输出示例:
+# 🚀 统一股票选股AI分析结果
+# 分析时间: 2025-07-08 14:30:15
+# 交易日期: 20250708
+# 最终选股数量: 6
+# AI分析完成: ✅
+# 
+# 📊 详细选股结果 (共6只):
+# 股票代码  股票名称   最新价  涨跌幅   流通市值  综合得分  风险调整得分  ai_score  final_score
+# 600519    贵州茅台   1680.5  2.15%   21045.6亿   85.32      78.45       92.50      86.78
+```
+
 ## 📁 项目结构
 
 ```
 itrading/
+├── ai_stock_analyzer.py          # AI股票分析器 (Google Gemini)
 ├── base_stock_picker.py          # 基础选股器
 ├── advanced_stock_picker.py      # 高级选股器
 ├── config.py                     # 配置文件
@@ -149,6 +220,7 @@ itrading/
 │   └── cons.py                 # 交易日期工具函数
 ├── docs/                        # 文档目录
 │   └── trading_day_utils_implementation.md  # 交易日工具实现文档
+├── demo_unified_analyzer.py    # 统一分析器演示
 └── tests/                       # 测试目录
     ├── test_gemini.py          # Gemini API测试
     └── test_cons_utils.py      # 交易日工具测试
@@ -237,6 +309,9 @@ uv run python base_stock_picker.py
 
 # 运行高级选股器
 uv run python advanced_stock_picker.py
+
+# 运行统一AI选股分析器演示
+uv run python tests/demo_unified_analyzer.py
 ```
 
 ### 测试覆盖

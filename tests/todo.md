@@ -11,5 +11,15 @@
       - Only keep AI google gemini provider.
       - Not use AI streaming method, not need stream_callback function.
 
+  - Unify and call these two systems stock picker and ai analyzer.
+    Create a new file unify_stock_pick_ai_analyzer.py:
+    - Default trade_date is today.
+    - Call advanced_stock_picker.py to get trade_date pickered stocks.
+    - Tranfer every pikered stock code to ai_stock_analyzer.py to get two field:
+ai_score and ai_analysis. Append this two fields to the end of this stock origin  fields.
+    -  Unify '流通市值,综合得分,风险评分,风险调整得分' + 'ai_score', created a new field 'final_score' to the end of every pickered stock.
+
+
+
   - Risk control, reasonable allocation of positions, setting stop-loss and take-profit points.
 

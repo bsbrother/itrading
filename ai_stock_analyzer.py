@@ -1639,7 +1639,7 @@ def stock_analyzer(stocks: list) -> tuple:
             'comprehensive_news_data': report['comprehensive_news_data'],
             'sentiment_analysis': report['sentiment_analysis'],
             'scores': report['scores'],
-            'comprehensive_score': report['scores']['comprehensive'],
+            'ai_score': report['scores']['comprehensive'],
             'recommendation': report['recommendation'],
             'ai_analysis': response.text
         }
@@ -1652,6 +1652,6 @@ if __name__ == "__main__":
         print('='*30)
         #pprint.pprint(dct)
         print(f"{dct['stock_code']}{dct['stock_name']}: {dct['current_price']}")
-        print(f"Score: {dct['comprehensive_score']}, {dct['recommendation']}")
+        print(f"Score: {dct['ai_score']}, {dct['recommendation']}")
         print(f"AI Analysis: {dct['ai_analysis']}")
 

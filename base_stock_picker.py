@@ -111,6 +111,13 @@ class BaseStockPicker:
         if not trade_date:
             raise ValueError("无效的交易日期格式")
         
+        # 获取当日股票列表和基本信息
+        stock_basic = self.ts_pro.stock_basic(
+            exchange='', 
+            list_status='L', 
+            fields='ts_code,symbol,name,area,industry,market'
+        )
+        
         # 获取当日行情数据
         daily_data = self.ts_pro.daily(
             trade_date=trade_date,
@@ -118,13 +125,6 @@ class BaseStockPicker:
         )
         if trade_date != datetime.datetime.now().strftime('%Y%m%d'):
             return daily_data
-        
-        # 获取当日股票列表和基本信息
-        stock_basic = self.ts_pro.stock_basic(
-            exchange='', 
-            list_status='L', 
-            fields='ts_code,symbol,name,area,industry,market'
-        )
         
         if daily_data.empty:
             logger.info("当日无交易数据，获取最近交易日数据...")
@@ -352,7 +352,11 @@ class BaseStockPicker:
                 df_clean['代码'].str.startswith('C') |     # 新股代码
                 df_clean['代码'].str.startswith('N') |     # 新股代码
                 df_clean['代码'].str.contains('ST') |      # ST股代码
-                df_clean['代码'].str.startswith('*')       # 特殊标记股票
+                df_clean['代码'].str.startswith('*') |     # 特殊标记股票
+                df_clean['代码'].str.startswith('4') |     # See config.py: 'A_main_board': "6*, ^688*, 0*, ^30*, ^8*, ^4*"
+                df_clean['代码'].str.startswith('8') |     
+                df_clean['代码'].str.startswith('30') |     
+                df_clean['代码'].str.startswith('688')
             )
             
             filtered_df = df_clean[~exclude_conditions]
@@ -790,8 +794,8 @@ class BaseStockPicker:
         """
         # Tushare字段映射到标准格式
         tushare_column_mapping = {
-            'ts_code': '代码',
-            'symbol': '代码',
+            'ts_code': '代码',  # Tushare格式为000001.SZ 
+            'symbol': '代码',   # 000001
             'name': '名称',
             'close': '最新',
             'open': '今开',

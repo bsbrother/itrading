@@ -3,6 +3,11 @@
 Stock Picker Configuration
 """
 
+# Stock category and code filters
+STOCK_CATEGORY_FILTER_CONFIG = {
+    'A_main_board': "6*, ^688*, 0*, ^30*, ^8*, ^4*",
+}
+
 # 市值范围配置 (单位: 元)
 MARKET_CAP_CONFIG = {
     'min_market_cap': 3e9,      # 最小流通市值 30亿
@@ -95,7 +100,7 @@ OUTPUT_CONFIG = {
     'file_format': 'csv',       # 文件格式 ('csv', 'excel')
     'include_charts': False,    # 是否包含图表
     'display_columns': [        # 显示的列
-        '代码', '名称', '最新', '涨幅', 
+        '代码', '名称', '最新', '涨幅',
         '换手率', '量比', '流通市值'
     ]
 }

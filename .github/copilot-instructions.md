@@ -74,7 +74,39 @@
   plt.close()
   ```
 
+## Classification and Code Characteristics of Chinese Stocks.
+
+  - 分类:
+    - A股(A-shares)：人民币普通股票，由中国境内公司发行，供境内机构、组织和个人（不含台港澳）以人民币认购和交易的普通股股票。有3个证券交易所，分别是上海证券交易所，深圳证券交易所，21年上的北京证券交易所。
+    - B股(B-shares)：人民币特种股票，在中国大陆注册上市的特种股票，以人民币标明面值，只能以外币认购和交易。
+    - H股(H-shares)：又叫港股，在香港上市的股票。
+    - 美股(US stocks)：在中国大陆注册，在美国证券交易所上市的股票。
+
+  - A股代码特点:
+    上交所（沪市）的代码是6开头，深交所（深市）是0和3开头，北交所是4和8开头。具体板块如下：
+
+    - 沪市主板股票代码以600/601/603/605开头，科创板股票代码以688开头。
+    - 深市主板股票代码以000/001/002/003/004开头，创业板股票代码以300/301开头。
+    - 北交所股票代码以8开头。
+    - 新三板股票代码以400/430/830开头。新三板全称是全国中小企业股份转让系统，是经国务院批准设立的全国性证券交易场所，为非上市股份有限公司的股份公开转让、融资、并购等相关业务提供服务。新三板属于场外市场，公司股份没有在证券交易所挂牌，而是通过证券交易公司交易。
+
+    新手只能购买上交所和深交所主板的股票，创业板需要2年的交易经验和月均10万的资产才可买，科创板需要2年交易经验和月均50万资产才可购买，北交所门槛和科创板一致。
+
+  - A股名称前缀:
+    - N: New
+    - ST: 经营异常股票 Or 盈利能力出现问题
+    - *ST: 有退市风险
+    - S: 没有按期完成股改
+    - G: 已经完成股改
+    - XD: 分红派息
+    - XR: 除权
+    - DR: 送股和派息
+
 ## The Chinese stock market (A-shares) is different from other markets.
+  ** Notice**: 
+  This project only supports A-shares, which is the stock market in mainland China, 
+  and does not support other markets such as US stocks, Hong Kong stocks, or overseas stocks.
+
   * Main differences:
     - The stock market open from 9:30 to 15:00, with a break from 11:30 to 13:00, closed on Saturdays and Sundays.
 
