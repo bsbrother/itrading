@@ -13,7 +13,8 @@ dependencies = [
     "akshare",
     "qstock",
     "pyfolio",
-    "backtrader"
+    "backtrader",
+    "reflex>=0.8.1"
 ]
 
 [project.optional-dependencies]

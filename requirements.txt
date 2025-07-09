@@ -8,3 +8,4 @@ akshare
 qstock
 pyfolio
 backtrader
+reflex>=0.8.1

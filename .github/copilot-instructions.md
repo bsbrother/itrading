@@ -4,6 +4,7 @@
   - Always update the README.md documentation when making changes to the codebase.
   - All test files must at tests/ directory.
   - Add temporary files for demo or test, remove them when fix issues or demo done.
+  - Use [Reflex framework](https://reflex.dev/docs/getting-started/introduction) for this project.
 
 ## Requirements
   - MCP server plugins: context7
@@ -26,8 +27,33 @@
   print(response.text)
   ```
 
-## Use Tushare or Akshare or Qstock Financial Data APIs
-  Preferred to using the Tushare API, Akshare API and Qstock API as a fallback option, lastest to use mock data for testing or demo purposes.
+## Financial Data Fetch by APIs
+  - TDX API
+  - Tushare API
+  - Akshare API 
+  - Qstock API
+  - mock data for testing or demo purposes.
+
+  Example [TDX for fetch stock data](https://pytdx-docs.readthedocs.io/zh-cn/latest/)
+  ```bash
+  $ find ../tools/TradingAgents-CN -type f -name '*.py'|xargs grep 'TdxHq'
+    ../tools/TradingAgents-CN/tests/fast_tdx_test.py:        from pytdx.hq import TdxHq_API
+    ../tools/TradingAgents-CN/tests/test_tdx_integration.py:        from pytdx.hq import TdxHq_API
+    ../tools/TradingAgents-CN/utils/enhanced_stock_list_fetcher.py:from pytdx.hq import TdxHq_API
+    ../tools/TradingAgents-CN/tradingagents/dataflows/tdx_utils.py:    from pytdx.hq import TdxHq_API
+  $ uv run python tests/test_tdx_integration.py
+    1. 在Web界面中可以分析中国股票代码 (如: 000001, 600519)
+    2. 通达信API提供实时数据，无需额外API密钥
+    3. 支持A股、深股、创业板、科创板等所有板块
+    4. 数据包括实时行情、历史K线、技术指标等
+  $ uv run python  ../tools/TradingAgents-CN/tests/fast_tdx_test.py
+    1. 优先使用前3个服务器
+    2. 如果连接失败，自动切换到备用服务器
+    3. 定期重新测试服务器可用性  
+
+  # More from https://github.com/yutiansut/QUANTAXIS, 
+    支持任务调度 分布式部署的 股票/期货/期权 数据/回测/模拟/交易/可视化/多账户 纯本地量化解决方案
+  ```
 
   Example [Tushare Pro for fetch cash flow data](https://tushare.pro/document/2?doc_id=16):
   ```python
@@ -41,6 +67,7 @@
   # 使用Tushare Pro获取 {ts_code} 的财务指标...")
   fina_indicator = PRO.fina_indicator(ts_code=ts_code, start_date='20240101', end_date='20241231')
   ```
+
   Example [Akshare for fetch stock data](https://akshare.akfamily.xyz/zh_CN/latest/stock/akshare_stock.html):
   ```python
   import akshare as ak
@@ -48,6 +75,7 @@
   sh_index = ak.stock_zh_index_daily(symbol="sh000001")
   print(sh_index)
   ```
+
   Example [Qstock for fetch stock data](https://qstock.readthedocs.io/en/latest/):
   ```python
   import qstock as qs

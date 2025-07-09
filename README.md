@@ -72,15 +72,34 @@ iTrading是一个基于量化分析的早盘选股系统，旨在帮助投资者
 ### 环境要求
 - Python 3.12+
 - uv (推荐的包管理器)
+- Reflex框架 (Web界面)
 
 ### 安装依赖
 ```bash
-# 使用uv安装依赖
+# 使用uv安装依赖 (推荐)
+uv sync
+
+# 或者手动安装
 uv pip install -r requirements.txt
 
 # 或者使用pip
 pip install -r requirements.txt
 ```
+
+### Web界面启动
+```bash
+# 启动Reflex Web应用
+uv run reflex run
+
+# 或者直接运行
+uv run python app.py
+```
+
+Web界面将在 http://localhost:3000 启动，提供：
+- 可视化股票筛选界面
+- 实时股票推荐展示
+- 交互式参数调整
+- 股票选择和管理功能
 
 ### 环境配置
 1. 创建环境变量文件 `~/apps/iagent/.env`

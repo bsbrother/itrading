@@ -20,6 +20,10 @@ ai_score and ai_analysis. Append this two fields to the end of this stock origin
     -  Unify '流通市值,综合得分,风险评分,风险调整得分' + 'ai_score', created a new field 'final_score' to the end of every pickered stock.
 
 
-
   - Risk control, reasonable allocation of positions, setting stop-loss and take-profit points.
+
+
+  - Use [Reflex framework](https://reflex.dev/docs/getting-started/introduction) for this project.
+    - For web application: uv run reflex run
+    - For functions test: uv run python path-to-script-name
 
